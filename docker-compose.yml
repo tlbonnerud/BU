@@ -1,0 +1,86 @@
+# BedriftUtility — production stack for the home server.
+# Run from this directory with:
+#   docker compose --env-file .env.production up -d --build
+#
+# `--env-file` is required: docker-compose only reads `.env` for ${VAR}
+# interpolation by default, but our values live in .env.production.
+#
+# Auth model: the app runs its OWN auth — access/refresh tokens in cookies,
+# sessions + refresh tokens in Redis, own role checks. Supabase is used only as
+# a Postgres database (+ its Studio UI for browsing tables), NOT for auth/RLS.
+
+services:
+  nextjs:
+    build:
+      context: ./my-app
+      dockerfile: Dockerfile
+    container_name: bedriftutility-next
+    env_file: .env.production
+    environment:
+      # Internal Redis (session + refresh-token store). If you enable a Redis
+      # password below, change this to redis://:${REDIS_PASSWORD}@redis:6379
+      REDIS_URL: redis://redis:6379
+    expose:
+      - "3000"
+    depends_on:
+      - redis
+    networks:
+      - bunet      # internal: cloudflared + webhook + redis
+      - supabase   # external: reach the Supabase Postgres container directly
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: bedriftutility-redis
+    # Session + refresh-token store. Internal only — never published to a host
+    # port. To require a password, uncomment and set REDIS_PASSWORD in
+    # .env.production (and update REDIS_URL above):
+    # command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - redis_data:/data
+    networks:
+      - bunet
+    restart: unless-stopped
+
+  webhook:
+    build: ./deploy/webhook
+    container_name: bedriftutility-webhook
+    env_file: .env.production
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/app                       # the repo, so deploy.sh can git pull + rebuild
+    entrypoint:
+      - sh
+      - -c
+      - 'sed "s|WEBHOOK_SECRET_PLACEHOLDER|$WEBHOOK_SECRET|" /etc/webhook/hooks.json > /tmp/hooks.json && exec webhook -hooks /tmp/hooks.json -verbose -port 9000'
+    depends_on:
+      - nextjs
+    networks:
+      - bunet
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: bedriftutility-cloudflared
+    env_file: .env.production       # provides TUNNEL_TOKEN
+    command: tunnel --no-autoupdate run
+    depends_on:
+      - nextjs
+      - webhook
+    networks:
+      - bunet      # → http://nextjs:3000  and  http://webhook:9000
+    restart: unless-stopped
+
+networks:
+  bunet:
+  # The existing Supabase stack's network — only so the app can reach the
+  # Postgres container by name. Confirm the real name on the server and set
+  # SUPABASE_NETWORK in .env.production:
+  #   docker inspect bedriftutility-kong -f '{{json .NetworkSettings.Networks}}'
+  # (Alternatively drop this network and point DATABASE_URL at hjemmeserver:5434.)
+  supabase:
+    external: true
+    name: ${SUPABASE_NETWORK}
+
+volumes:
+  redis_data:

@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+/* Bedrift Utility design system — tokens + components (SSR-safe, static). */
+@import "../components/ds/styles/tokens.css";
+@import "../components/ds/styles/components.css";
+
+/* Marketing surfaces (landing + auth). */
+@import "../components/marketing/styles/marketing.css";
+@import "../components/marketing/styles/auth.css";
+
+/* App surfaces (logged-in shell + screens). */
+@import "../components/app/styles/app.css";
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--white);
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: var(--lh-base);
+  color: var(--text-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
