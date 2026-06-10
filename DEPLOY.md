@@ -74,12 +74,13 @@ No Supabase hostname is needed — the browser never calls Supabase.
 1. Set a long random `WEBHOOK_SECRET` in `.env.production`.
 2. In the GitHub repo → **Settings → Webhooks → Add webhook**:
    - Payload URL: `https://deploy.dittdomene.no/hooks/deploy-bedriftutility`
-   - Content type: `application/json`
+   - Content type: `application/json` *(recommended; the hook also tolerates GitHub's form-encoded `payload=` deliveries)*
    - Secret: the same `WEBHOOK_SECRET`
    - Events: **Just the push event**
 
-On push to `main`, `deploy.sh` runs `git pull --ff-only` then
-`docker compose --env-file .env.production up -d --build nextjs`.
+On push to `main`, `deploy.sh` runs `git fetch --prune origin`,
+`git reset --hard origin/main`, then
+`docker compose -p bedriftutility-app --env-file .env.production up -d --build nextjs`.
 
 > The repo is bind-mounted into the webhook container. For a **private** repo,
 > give the container pull credentials (a read-only deploy key or a stored
