@@ -4,6 +4,12 @@
     "execute-command": "/etc/webhook/deploy.sh",
     "command-working-directory": "/app",
     "response-message": "Deploy triggered.",
+    "parse-parameters-as-json": [
+      {
+        "source": "payload",
+        "name": "payload"
+      }
+    ],
     "trigger-rule": {
       "and": [
         {
@@ -14,11 +20,22 @@
           }
         },
         {
-          "match": {
-            "type": "value",
-            "value": "refs/heads/main",
-            "parameter": { "source": "payload", "name": "ref" }
-          }
+          "or": [
+            {
+              "match": {
+                "type": "value",
+                "value": "refs/heads/main",
+                "parameter": { "source": "payload", "name": "ref" }
+              }
+            },
+            {
+              "match": {
+                "type": "value",
+                "value": "refs/heads/main",
+                "parameter": { "source": "payload", "name": "payload.ref" }
+              }
+            }
+          ]
         }
       ]
     }

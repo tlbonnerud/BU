@@ -5,14 +5,33 @@
 set -eu
 
 cd /app
+export COMPOSE_PROJECT_NAME=bedriftutility-app
+export HOME=/tmp
+mkdir -p "$HOME"
 
-# The repo is bind-mounted; mark it safe for git inside the container.
-git config --global --add safe.directory /app
+git_safe() {
+  git -c safe.directory=/app "$@"
+}
 
-echo "[deploy] git pull --ff-only"
-git pull --ff-only
+lockdir="/tmp/bedriftutility-deploy.lock"
+if ! mkdir "$lockdir" 2>/dev/null; then
+  echo "[deploy] another deploy is already running"
+  exit 0
+fi
+trap 'rmdir "$lockdir"' EXIT INT TERM
 
+echo "[deploy] current HEAD: $(git_safe rev-parse HEAD)"
+echo "[deploy] git fetch --prune origin"
+git_safe fetch --prune origin
+
+echo "[deploy] git reset --hard origin/main"
+git_safe reset --hard origin/main
+
+echo "[deploy] new HEAD: $(git_safe rev-parse HEAD)"
 echo "[deploy] rebuilding nextjs"
-docker compose --env-file .env.production up -d --build nextjs
+docker compose -p bedriftutility-app --env-file .env.production up -d --build nextjs
+
+echo "[deploy] stack status"
+docker compose -p bedriftutility-app --env-file .env.production ps
 
 echo "[deploy] done"
